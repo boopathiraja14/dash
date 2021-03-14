@@ -1,98 +1,64 @@
-import pandas as pd
-import plotly.express as px  # (version 4.7.0)
-import plotly.graph_objects as go
-
-import dash  # (version 1.12.0) pip install dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
+import dash
+import pandas as pd
+from plotly import graph_objects as go
+import flask
+import google.cloud.logging
+import logging
 
+# Instantiates a client
+# client = google.cloud.logging.Client()
+# client.setup_logging()
+#
+# logging.getLogger().setLevel(logging.INFO)
+
+
+# server = flask.Flask(__name__)
+# app = flask.Flask(__name__)
+# app = dash.Dash(__name__, server)
 app = dash.Dash(__name__)
+server = app.server
 
-# ---------- Import and clean data (importing csv into pandas)
-# df = pd.read_csv("intro_bees.csv")
-df = pd.read_csv("https://raw.githubusercontent.com/Coding-with-Adam/Dash-by-Plotly/master/Other/Dash_Introduction/intro_bees.csv")
+df = pd.read_csv('gapminderDataFiveYear.csv')
+year_options = []
+for year in df.year.unique():
+    year_options.append({'label':str(year), 'value':year})
 
-df = df.groupby(['State', 'ANSI', 'Affected by', 'Year', 'state_code'])[['Pct of Colonies Impacted']].mean()
-df.reset_index(inplace=True)
-print(df[:5])
-
-# ------------------------------------------------------------------------------
-# App layout
 app.layout = html.Div([
+    html.Div('text is only'),
+    html.P('some nice graph'),
+   dcc.Graph(id='graph'),
+   dcc.Dropdown(id='year_picker', options=year_options, value=df['year'].max())
+], style=dict(width='48%'))
 
-    html.H1("Web Application Dashboards with Dash", style={'text-align': 'center'}),
+# @app.route("/", methods=['GET'])
+# def home():
+    # logging.info('bas shape')
+    # return 'good work bas'
+#
+# app.route('/get_dash')
+@app.callback(Output(component_id='graph', component_property='figure'),
+              [Input(component_id='year_picker', component_property='value')])
+def render_page(input):
 
-    dcc.Dropdown(id="slct_year",
-                 options=[
-                     {"label": "2015", "value": 2015},
-                     {"label": "2016", "value": 2016},
-                     {"label": "2017", "value": 2017},
-                     {"label": "2018", "value": 2018}],
-                 multi=False,
-                 value=2015,
-                 style={'width': "40%"}
-                 ),
+    df_year = df[df.year == input]
+    traces = []
 
-    html.Div(id='output_container', children=[]),
-    html.Br(),
+    fig = go.Figure()
+    for cont in df_year['continent'].unique():
+        df_cont = df_year[df_year.continent == cont]
+        fig.add_trace(go.Scatter(x=df_cont['gdpPercap'], y=df_cont['lifeExp'],
+                      mode='markers',
+                      opacity=0.7,
+                      marker=dict(size=15),
+                      name=cont
+                      ))
 
-    dcc.Graph(id='my_bee_map', figure={})
+    return fig
 
-])
-
-
-# ------------------------------------------------------------------------------
-# Connect the Plotly graphs with Dash Components
-@app.callback(
-    [Output(component_id='output_container', component_property='children'),
-     Output(component_id='my_bee_map', component_property='figure')],
-    [Input(component_id='slct_year', component_property='value')]
-)
-def update_graph(option_slctd):
-    print(option_slctd)
-    print(type(option_slctd))
-
-    container = "The year chosen by user was: {}".format(option_slctd)
-
-    dff = df.copy()
-    dff = dff[dff["Year"] == option_slctd]
-    dff = dff[dff["Affected by"] == "Varroa_mites"]
-
-    # Plotly Express
-    fig = px.choropleth(
-        data_frame=dff,
-        locationmode='USA-states',
-        locations='state_code',
-        scope="usa",
-        color='Pct of Colonies Impacted',
-        hover_data=['State', 'Pct of Colonies Impacted'],
-        color_continuous_scale=px.colors.sequential.YlOrRd,
-        labels={'Pct of Colonies Impacted': '% of Bee Colonies'},
-        template='plotly_dark'
-    )
-
-    # Plotly Graph Objects (GO)
-    # fig = go.Figure(
-    #     data=[go.Choropleth(
-    #         locationmode='USA-states',
-    #         locations=dff['state_code'],
-    #         z=dff["Pct of Colonies Impacted"].astype(float),
-    #         colorscale='Reds',
-    #     )]
-    # )
-    #
-    # fig.update_layout(
-    #     title_text="Bees Affected by Mites in the USA",
-    #     title_xanchor="center",
-    #     title_font=dict(size=24),
-    #     title_x=0.5,
-    #     geo=dict(scope='usa'),
-    # )
-
-    return container, fig
-
-
-# ------------------------------------------------------------------------------
+# app.run_server()
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    # app.run()
+    app.run_server()
